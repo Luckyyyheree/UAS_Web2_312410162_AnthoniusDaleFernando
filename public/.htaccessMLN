@@ -1,0 +1,19 @@
+<?php
+
+// 1. Definisikan konstanta agar Autoloader tidak mencari sendiri
+if (!defined('COMPOSER_PATH')) {
+    define('COMPOSER_PATH', realpath(__DIR__ . '/../vendor/autoload.php'));
+}
+
+// 2. Load Composer Autoloader
+require COMPOSER_PATH;
+
+// 3. Load Environment secara manual
+$app = \Config\Services::codeigniter();
+$app->initialize();
+
+// 4. Jalankan tanpa melalui sistem 'rewrite.php'
+$context = is_cli() ? 'php-cli' : 'web';
+$app->run($context);
+
+exit; // Memastikan tidak ada proses lain yang berjalan
