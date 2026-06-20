@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>db_inventory | Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body x-data="inventarisApp()">
+
+    <!-- LOGIN -->
+    <div x-show="!isLoggedIn" class="login-wrapper" x-cloak>
+        <div class="login-card">
+            <h2>db_inventory</h2>
+            <input type="text" id="user" placeholder="Username" @keydown.enter="login">
+            <input type="password" id="pass" placeholder="Password" @keydown.enter="login">
+            <p class="field-error" x-show="loginError" x-text="loginError"></p>
+            <button class="btn-primary" style="justify-content:center" @click="login">Masuk</button>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div x-show="isLoggedIn" class="dashboard-layout" x-cloak>
+
+        <aside class="sidebar">
+            <h2>db_inventory</h2>
+
+            <div class="nav-section-label">Utama</div>
+            <div class="nav-links">
+                <div class="nav-link" :class="currentView === 'dashboard' ? 'active' : ''" tabindex="0" role="button"
+                     @click="currentView = 'dashboard'" @keydown.enter="currentView = 'dashboard'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </div>
+                <div class="nav-link" :class="currentView === 'kategori' ? 'active' : ''" tabindex="0" role="button"
+                     @click="currentView = 'kategori'" @keydown.enter="currentView = 'kategori'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    Kategori
+                </div>
+                <div class="nav-link" :class="currentView === 'barang' ? 'active' : ''" tabindex="0" role="button"
+                     @click="currentView = 'barang'" @keydown.enter="currentView = 'barang'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                    Barang
+                </div>
+            </div>
+
+            <div class="nav-section-label sidebar-bottom-label">Akun</div>
+            <div class="nav-link" tabindex="0" role="button" @click="logout" @keydown.enter="logout">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Logout
+            </div>
+        </aside>
+
+        <main class="main-content">
+
+            <div class="page-header">
+                <div>
+                    <h1 x-text="viewTitles[currentView]"></h1>
+                    <p class="page-subtitle" x-text="viewSubtitles[currentView]"></p>
+                </div>
+                <button class="btn-refresh" @click="loadItems" :disabled="isLoading" title="Muat ulang data">
+                    <svg :class="isLoading ? 'spin' : ''" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg>
+                </button>
+            </div>
+
+            <!-- DASHBOARD VIEW -->
+            <template x-if="currentView === 'dashboard'">
+                <div class="view-fade">
+
+                    <div class="stats-row">
+                        <div class="card">
+                            <h4>Total Barang</h4>
+                            <p x-text="items.length"></p>
+                        </div>
+                        <div class="card">
+                            <h4>Stok Rendah</h4>
+                            <p x-text="items.filter(i => i.stok < 5).length"></p>
+                        </div>
+                        <div class="card">
+                            <h4>Total Nilai Inventory</h4>
+                            <p class="card-value-sm" x-text="'Rp ' + totalValue.toLocaleString('id-ID')"></p>
+                        </div>
+                    </div>
+
+                    <div class="dash-grid">
+                        <div class="card">
+                            <h4 class="section-title">Sebaran Kategori</h4>
+                            <template x-if="categoryBreakdown.length === 0">
+                                <p style="color:var(--text-3);font-size:12px;padding:6px 0">Belum ada data kategori.</p>
+                            </template>
+                            <template x-for="cat in categoryBreakdown" :key="cat.kategori">
+                                <div class="cat-bar-row" tabindex="0" role="button"
+                                     @click="goToCategory(cat.kategori)" @keydown.enter="goToCategory(cat.kategori)">
+                                    <span class="cat-bar-label" x-text="cat.kategori"></span>
+                                    <div class="cat-bar-track">
+                                        <div class="cat-bar-fill" :style="'width:' + (barsAnimated ? cat.pct : 0) + '%'"></div>
+                                    </div>
+                                    <span class="cat-bar-count" x-text="cat.count"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="card">
+                            <h4 class="section-title">Stok Menipis</h4>
+                            <template x-if="lowStockItems.length === 0">
+                                <p style="color:var(--text-3);font-size:12px;padding:6px 0">Semua stok masih aman 👍</p>
+                            </template>
+                            <template x-for="item in lowStockItems" :key="item.id">
+                                <div class="low-stock-row" tabindex="0" role="button"
+                                     @click="focusItem(item)" @keydown.enter="focusItem(item)">
+                                    <span class="td-name" x-text="item.nama_barang"></span>
+                                    <span class="td-stok-low" x-text="item.stok + ' tersisa'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+            </template>
+
+            <!-- KATEGORI VIEW -->
+            <template x-if="currentView === 'kategori'">
+                <div class="view-fade">
+                    <template x-if="categoryBreakdown.length === 0">
+                        <div class="card">
+                            <div class="empty-state">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                                <h4>Belum ada kategori</h4>
+                                <p>Kategori akan muncul otomatis begitu kamu menambahkan barang.</p>
+                            </div>
+                        </div>
+                    </template>
+                    <div class="kategori-grid" x-show="categoryBreakdown.length > 0">
+                        <template x-for="cat in categoryBreakdown" :key="cat.kategori">
+                            <div class="card kategori-card" tabindex="0" role="button"
+                                 @click="goToCategory(cat.kategori)" @keydown.enter="goToCategory(cat.kategori)">
+                                <div class="kc-name" x-text="cat.kategori"></div>
+                                <div class="kc-count" x-text="cat.count + ' barang'"></div>
+                                <div class="kc-value" x-text="'Rp ' + cat.value.toLocaleString('id-ID')"></div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <!-- BARANG VIEW -->
+            <template x-if="currentView === 'barang'">
+                <div class="view-fade">
+                    <div class="card">
+                        <div class="filter-chip" x-show="activeCategoryFilter" x-cloak>
+                            <span>Kategori: <strong x-text="activeCategoryFilter"></strong></span>
+                            <button @click="activeCategoryFilter = null" aria-label="Hapus filter kategori">✕</button>
+                        </div>
+
+                        <div class="table-card-header">
+                            <span class="table-card-title">Daftar Barang</span>
+                            <div class="table-actions">
+                                <input type="text" x-model="search" placeholder="Cari barang..." aria-label="Cari barang">
+                                <button class="btn-primary" @click="openModal('add')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    Tambah
+                                </button>
+                            </div>
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="sortable" :class="sortKey === 'id_kategori' ? 'active' : ''" @click="sortBy('id_kategori')">
+                                        Kategori <span class="sort-arrow" x-text="sortKey === 'id_kategori' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'"></span>
+                                    </th>
+                                    <th class="sortable" :class="sortKey === 'nama_barang' ? 'active' : ''" @click="sortBy('nama_barang')">
+                                        Nama Barang <span class="sort-arrow" x-text="sortKey === 'nama_barang' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'"></span>
+                                    </th>
+                                    <th class="sortable" :class="sortKey === 'stok' ? 'active' : ''" @click="sortBy('stok')">
+                                        Stok <span class="sort-arrow" x-text="sortKey === 'stok' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'"></span>
+                                    </th>
+                                    <th class="sortable" :class="sortKey === 'harga' ? 'active' : ''" @click="sortBy('harga')">
+                                        Harga <span class="sort-arrow" x-text="sortKey === 'harga' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'"></span>
+                                    </th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+
+                            <!-- skeleton -->
+                            <tbody x-show="isLoading">
+                                <template x-for="n in 5" :key="n">
+                                    <tr class="skeleton-row">
+                                        <td><div class="skeleton" style="width:60px"></div></td>
+                                        <td><div class="skeleton" style="width:150px"></div></td>
+                                        <td><div class="skeleton" style="width:36px"></div></td>
+                                        <td><div class="skeleton" style="width:80px"></div></td>
+                                        <td><div class="skeleton" style="width:90px"></div></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+
+                            <!-- data -->
+                            <tbody x-show="!isLoading">
+                                <tr x-show="paginatedItems.length === 0">
+                                    <td colspan="5" class="td-empty">
+                                        <div class="empty-state">
+                                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                                            <h4 x-text="items.length === 0 ? 'Belum ada barang' : 'Tidak ditemukan'"></h4>
+                                            <p x-text="items.length === 0 ? 'Mulai tambahkan barang pertama ke inventory.' : 'Coba ubah kata kunci pencarian atau hapus filter kategori.'"></p>
+                                            <button class="btn-primary" x-show="items.length === 0" @click="openModal('add')">+ Tambah Barang</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <template x-for="item in paginatedItems" :key="item.id">
+                                    <tr>
+                                        <td data-label="Kategori"><span class="tag-kategori" x-text="item.id_kategori"></span></td>
+                                        <td data-label="Nama Barang" class="td-name" x-text="item.nama_barang"></td>
+                                        <td data-label="Stok" :class="item.stok < 5 ? 'td-stok-low' : ''" x-text="item.stok < 5 ? item.stok + ' ⚠' : item.stok"></td>
+                                        <td data-label="Harga" class="td-price" x-text="'Rp ' + parseInt(item.harga).toLocaleString('id-ID')"></td>
+                                        <td data-label="Aksi" class="td-actions">
+                                            <button class="btn-edit" @click="openModal('edit', item)">Edit</button>
+                                            <button class="btn-delete" :disabled="deletingId === item.id" @click="deleteItem(item)" x-text="deletingId === item.id ? 'Menghapus...' : 'Hapus'"></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+
+                        <div class="pagination" x-show="!isLoading && sortedItems.length > 0">
+                            <span x-text="'Menampilkan ' + ((currentPage-1)*perPage+1) + '–' + Math.min(currentPage*perPage, sortedItems.length) + ' dari ' + sortedItems.length + ' barang'"></span>
+                            <div class="pagination-controls">
+                                <button @click="currentPage--" :disabled="currentPage === 1">‹ Sebelumnya</button>
+                                <button @click="currentPage++" :disabled="currentPage === totalPages">Selanjutnya ›</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+        </main>
+    </div>
+
+    <!-- MODAL -->
+    <div x-show="modalOpen" x-transition.opacity.duration.200ms class="modal-overlay" @click.self="closeModal" @keydown.escape.window="closeModal" x-cloak>
+        <div class="login-box" x-show="modalOpen" x-transition.opacity.scale.92.duration.200ms>
+            <h3 x-text="modalType == 'add' ? '+ Tambah Barang' : 'Edit Barang'"></h3>
+
+            <input type="text" x-model="formData.nama_barang" placeholder="Nama Barang" aria-label="Nama Barang"
+                   :class="formErrors.nama_barang ? 'input-error' : ''">
+            <p class="field-error" x-show="formErrors.nama_barang" x-text="formErrors.nama_barang"></p>
+
+            <input type="text" x-model="formData.id_kategori" placeholder="Kategori" aria-label="Kategori" list="kategori-options"
+                   :class="formErrors.id_kategori ? 'input-error' : ''">
+            <datalist id="kategori-options">
+                <template x-for="cat in uniqueCategories" :key="cat">
+                    <option :value="cat"></option>
+                </template>
+            </datalist>
+            <p class="field-error" x-show="formErrors.id_kategori" x-text="formErrors.id_kategori"></p>
+
+            <input type="number" x-model="formData.stok" placeholder="Stok" aria-label="Stok" min="0"
+                   :class="formErrors.stok ? 'input-error' : ''">
+            <p class="field-error" x-show="formErrors.stok" x-text="formErrors.stok"></p>
+
+            <input type="number" x-model="formData.harga" placeholder="Harga (Rp)" aria-label="Harga" min="0"
+                   :class="formErrors.harga ? 'input-error' : ''">
+            <p class="field-error" x-show="formErrors.harga" x-text="formErrors.harga"></p>
+
+            <button class="btn-primary" style="justify-content:center;margin-top:6px" :disabled="isSubmitting" @click="submitForm">
+                <span x-text="isSubmitting ? 'Menyimpan...' : 'Simpan'"></span>
+            </button>
+            <button class="btn-delete" style="width:100%;padding:9px;border-radius:8px;border:1px solid #21262d;color:#6e7681" @click="closeModal">Batal</button>
+        </div>
+    </div>
+
+    <!-- TOASTS -->
+    <div class="toast-container">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="toast" :class="'toast-' + toast.type"
+                 x-transition:enter="toast-enter" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                 x-transition:leave="toast-leave" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function inventarisApp() {
+            return {
+                isLoggedIn: false,
+                loginError: '',
+                modalOpen: false,
+                modalType: 'add',
+                search: '',
+                items: [],
+                formData: {},
+                formErrors: {},
+                isLoading: false,
+                isSubmitting: false,
+                deletingId: null,
+                currentView: 'dashboard',
+                activeCategoryFilter: null,
+                sortKey: 'nama_barang',
+                sortDir: 'asc',
+                currentPage: 1,
+                perPage: 8,
+                toasts: [],
+                barsAnimated: false,
+
+                viewTitles: {
+                    dashboard: 'Dashboard',
+                    kategori: 'Kategori',
+                    barang: 'Daftar Barang'
+                },
+                viewSubtitles: {
+                    dashboard: 'Ringkasan kondisi inventory saat ini',
+                    kategori: 'Sebaran barang berdasarkan kategori',
+                    barang: 'Kelola semua barang di gudang'
+                },
+
+                init() {
+                    this.$watch('search', () => { this.currentPage = 1; });
+                    this.$watch('activeCategoryFilter', () => { this.currentPage = 1; });
+                },
+
+                login() {
+                    const u = document.getElementById('user').value;
+                    const p = document.getElementById('pass').value;
+                    if (u === 'admin' && p === 'admin123') {
+                        this.loginError = '';
+                        this.isLoggedIn = true;
+                        this.loadItems();
+                    } else {
+                        this.loginError = 'Username atau password salah.';
+                    }
+                },
+
+                logout() {
+                    this.isLoggedIn = false;
+                    this.currentView = 'dashboard';
+                    this.activeCategoryFilter = null;
+                    this.search = '';
+                },
+
+                async loadItems() {
+                    this.isLoading = true;
+                    try {
+                        const res = await fetch('http://localhost/backend-api/public/index.php/api/barang', {
+                            headers: { 'Authorization': 'Bearer secret-token-123' }
+                        });
+                        if (!res.ok) throw new Error('Request gagal');
+                        this.items = await res.json();
+                        this.currentPage = 1;
+                        this.barsAnimated = false;
+                        setTimeout(() => { this.barsAnimated = true; }, 80);
+                    } catch (e) {
+                        console.error('Gagal memuat data:', e);
+                        this.addToast('error', 'Gagal memuat data. Periksa koneksi ke backend.');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                get filteredItems() {
+                    let list = this.items;
+                    if (this.activeCategoryFilter) {
+                        list = list.filter(i => i.id_kategori === this.activeCategoryFilter);
+                    }
+                    if (this.search.trim()) {
+                        const q = this.search.toLowerCase();
+                        list = list.filter(i => (i.nama_barang || '').toLowerCase().includes(q));
+                    }
+                    return list;
+                },
+
+                get sortedItems() {
+                    const list = [...this.filteredItems];
+                    const dir = this.sortDir === 'asc' ? 1 : -1;
+                    list.sort((a, b) => {
+                        const av = a[this.sortKey];
+                        const bv = b[this.sortKey];
+                        if (typeof av === 'string') return av.localeCompare(bv) * dir;
+                        return ((av || 0) - (bv || 0)) * dir;
+                    });
+                    return list;
+                },
+
+                get totalPages() {
+                    return Math.max(1, Math.ceil(this.sortedItems.length / this.perPage));
+                },
+
+                get paginatedItems() {
+                    const start = (this.currentPage - 1) * this.perPage;
+                    return this.sortedItems.slice(start, start + this.perPage);
+                },
+
+                sortBy(key) {
+                    if (this.sortKey === key) {
+                        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortKey = key;
+                        this.sortDir = 'asc';
+                    }
+                },
+
+                get totalValue() {
+                    return this.items.reduce((sum, i) => sum + (parseInt(i.stok) || 0) * (parseInt(i.harga) || 0), 0);
+                },
+
+                get lowStockItems() {
+                    return [...this.items].filter(i => i.stok < 5).sort((a, b) => a.stok - b.stok).slice(0, 5);
+                },
+
+                get uniqueCategories() {
+                    return [...new Set(this.items.map(i => i.id_kategori).filter(Boolean))];
+                },
+
+                get categoryBreakdown() {
+                    const map = {};
+                    this.items.forEach(i => {
+                        const k = i.id_kategori || 'Tanpa Kategori';
+                        if (!map[k]) map[k] = { kategori: k, count: 0, value: 0 };
+                        map[k].count += 1;
+                        map[k].value += (parseInt(i.stok) || 0) * (parseInt(i.harga) || 0);
+                    });
+                    const arr = Object.values(map).sort((a, b) => b.count - a.count);
+                    const max = Math.max(1, ...arr.map(c => c.count));
+                    return arr.map(c => ({ ...c, pct: Math.round((c.count / max) * 100) }));
+                },
+
+                goToCategory(kategori) {
+                    this.activeCategoryFilter = kategori;
+                    this.currentView = 'barang';
+                    this.search = '';
+                },
+
+                focusItem(item) {
+                    this.currentView = 'barang';
+                    this.activeCategoryFilter = null;
+                    this.search = item.nama_barang;
+                },
+
+                openModal(type, item = null) {
+                    this.modalType = type;
+                    this.formData = item ? { ...item } : { stok: 0, harga: 0 };
+                    this.formErrors = {};
+                    this.modalOpen = true;
+                },
+
+                closeModal() {
+                    this.modalOpen = false;
+                    this.formErrors = {};
+                },
+
+                validateForm() {
+                    const errors = {};
+                    if (!this.formData.nama_barang || !String(this.formData.nama_barang).trim()) {
+                        errors.nama_barang = 'Nama barang wajib diisi';
+                    }
+                    if (!this.formData.id_kategori || !String(this.formData.id_kategori).trim()) {
+                        errors.id_kategori = 'Kategori wajib diisi';
+                    }
+                    if (this.formData.stok === '' || this.formData.stok === undefined || this.formData.stok === null || Number(this.formData.stok) < 0) {
+                        errors.stok = 'Stok wajib diisi, minimal 0';
+                    }
+                    if (!this.formData.harga || Number(this.formData.harga) <= 0) {
+                        errors.harga = 'Harga wajib diisi, harus lebih dari 0';
+                    }
+                    this.formErrors = errors;
+                    return Object.keys(errors).length === 0;
+                },
+
+                async submitForm() {
+                    if (!this.validateForm()) return;
+                    this.isSubmitting = true;
+                    const method = this.modalType === 'add' ? 'POST' : 'PUT';
+                    const url = 'http://localhost/backend-api/public/index.php/api/barang/' + (this.formData.id || '');
+                    try {
+                        const res = await fetch(url, {
+                            method,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer secret-token-123'
+                            },
+                            body: JSON.stringify(this.formData)
+                        });
+                        if (!res.ok) throw new Error('Request gagal');
+                        this.addToast('success', this.modalType === 'add' ? 'Barang berhasil ditambahkan.' : 'Barang berhasil diperbarui.');
+                        this.modalOpen = false;
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Gagal menyimpan:', e);
+                        this.addToast('error', 'Gagal menyimpan barang. Coba lagi.');
+                    } finally {
+                        this.isSubmitting = false;
+                    }
+                },
+
+                async deleteItem(item) {
+                    if (!confirm('Hapus "' + item.nama_barang + '"?')) return;
+                    this.deletingId = item.id;
+                    try {
+                        const res = await fetch('http://localhost/backend-api/public/index.php/api/barang/' + item.id, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer secret-token-123' }
+                        });
+                        if (!res.ok) throw new Error('Request gagal');
+                        this.addToast('success', 'Barang berhasil dihapus.');
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Gagal menghapus:', e);
+                        this.addToast('error', 'Gagal menghapus barang. Coba lagi.');
+                    } finally {
+                        this.deletingId = null;
+                    }
+                },
+
+                addToast(type, message) {
+                    const id = Date.now() + Math.random();
+                    this.toasts.push({ id, type, message });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3500);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
