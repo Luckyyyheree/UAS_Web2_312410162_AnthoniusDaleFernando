@@ -17,6 +17,13 @@
 - `PUT /api/barang/{id}` : Mengubah data barang.
 - `DELETE /api/barang/{id}` : Menghapus data barang.
 
+
+### Link Demo beserta user dan password:
+- Link: https://starlit-tarsier-a85211.netlify.app/
+- User: admin
+- Password: admin123
+
+
 ### ScreenShoot:
 
 <img width="959" height="538" alt="image" src="https://github.com/user-attachments/assets/3879c42d-2d4d-4f14-8e86-ed1064b52fc3" />
